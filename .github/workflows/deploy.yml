@@ -1,3 +1,4 @@
+# GitHub Pages deployment for the Excel-driven dashboard.
 name: Build and Deploy Project B Dashboard
 
 on:

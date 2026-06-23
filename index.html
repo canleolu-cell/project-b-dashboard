@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project B 匈牙利至上海物流看板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --ink: #172033;
+            --muted: #667085;
+            --line: #dfe4ea;
+            --bg: #f4f6f8;
+            --panel: #ffffff;
+            --green: #0f8a64;
+            --blue: #2563eb;
+            --amber: #c96a0a;
+            --red: #c43b3b;
+            --teal: #147d92;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; background: var(--bg); color: var(--ink); font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
+        .container { max-width: 1600px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 28px; background: #162238; color: white; border-radius: 8px; margin-bottom: 16px; }
+        h1 { margin: 0; font-size: 28px; }
+        header p { margin: 7px 0 0; color: #cbd5e1; }
+        .route { padding: 8px 12px; background: #e8f6f2; color: #09684b; border-radius: 6px; font-weight: 700; white-space: nowrap; }
+        .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+        .metric { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 8px; padding: 17px 18px; min-height: 112px; }
+        .metric:nth-child(2) { border-left-color: var(--teal); }
+        .metric:nth-child(3) { border-left-color: var(--amber); }
+        .metric:nth-child(4) { border-left-color: var(--green); }
+        .metric label { color: var(--muted); font-size: 13px; }
+        .metric strong { display: block; margin: 8px 0 4px; font-size: 25px; }
+        .metric span { color: var(--muted); font-size: 13px; }
+        .workspace { display: grid; grid-template-columns: 310px minmax(520px, 1fr) 390px; gap: 16px; align-items: stretch; }
+        .lot-panel, .detail, .chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+        .lot-panel { max-height: 820px; overflow-y: auto; }
+        .panel-title { position: sticky; top: 0; z-index: 2; padding: 14px 16px; background: #eef2f6; border-bottom: 1px solid var(--line); font-weight: 700; }
+        .record { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 13px 16px; border-bottom: 1px solid #edf0f3; cursor: pointer; }
+        .record:hover { background: #f8fafc; }
+        .record.active { background: #eaf2ff; box-shadow: inset 3px 0 var(--blue); }
+        .record strong { font-size: 14px; }
+        .record small { color: var(--muted); display: block; margin-top: 4px; }
+        .status { align-self: center; font-size: 12px; font-weight: 700; }
+        .detail { padding: 24px; }
+        .detail h2 { margin: 0; font-size: 21px; }
+        .detail-subtitle { color: var(--muted); margin: 6px 0 0; }
+        .timeline { display: grid; grid-template-columns: repeat(3, 1fr); position: relative; gap: 12px; margin: 38px 0 30px; }
+        .timeline::before { content: ""; position: absolute; top: 16px; left: 16%; right: 16%; height: 2px; background: var(--line); }
+        .node { position: relative; text-align: center; z-index: 1; }
+        .node-dot { width: 34px; height: 34px; border-radius: 50%; margin: 0 auto 9px; background: #e7ebf0; border: 5px solid white; box-shadow: 0 0 0 2px #cfd6df; }
+        .node.passed .node-dot { background: var(--green); box-shadow: 0 0 0 2px var(--green); }
+        .node.current .node-dot { background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
+        .node label { display: block; font-weight: 700; font-size: 13px; }
+        .node span { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
+        .info-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; border-top: 1px solid var(--line); padding-top: 18px; }
+        .info { background: #f7f9fb; border: 1px solid #e8ecf0; border-radius: 6px; padding: 11px; min-height: 64px; }
+        .info label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+        .info strong { font-size: 14px; overflow-wrap: anywhere; }
+        .remark { margin-top: 14px; padding: 13px; border: 1px solid #f0d9bd; background: #fff8ee; color: #8a4908; border-radius: 6px; line-height: 1.5; }
+        .chart-panel { padding: 18px; }
+        .chart-panel h3 { margin: 0 0 14px; text-align: center; font-size: 16px; }
+        .chart-wrap { height: 500px; }
+        .legend-note { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 16px; }
+        .error { padding: 16px; margin-bottom: 16px; border: 1px solid #f0b8b8; background: #fff1f1; color: #922b2b; border-radius: 6px; }
+        @media (max-width: 1180px) {
+            .summary { grid-template-columns: repeat(2, 1fr); }
+            .workspace { grid-template-columns: 280px 1fr; }
+            .chart-panel { grid-column: 1 / -1; }
+            .chart-wrap { height: 380px; }
+        }
+        @media (max-width: 760px) {
+            body { padding: 10px; }
+            header { align-items: flex-start; flex-direction: column; }
+            h1 { font-size: 23px; }
+            .summary, .workspace { grid-template-columns: 1fr; }
+            .lot-panel { max-height: 360px; }
+            .chart-panel { grid-column: auto; }
+            .info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .timeline { gap: 4px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div>
+            <h1>PROJECT B 匈牙利至上海物流与利润看板</h1>
+            <p id="subtitle">正在读取 Excel 数据...</p>
+        </div>
+        <div class="route">HU → 中转港 → SHANGHAI</div>
+    </header>
+    <div id="errorBox"></div>
+    <section class="summary" id="summary"></section>
+    <main class="workspace">
+        <aside class="lot-panel">
+            <div class="panel-title">批次与货品</div>
+            <div id="recordList"></div>
+        </aside>
+        <section class="detail">
+            <h2 id="detailTitle">选择记录查看详情</h2>
+            <p class="detail-subtitle" id="detailSubtitle">-</p>
+            <div class="timeline">
+                <div class="node" id="node1"><div class="node-dot"></div><label>欧洲起运</label><span id="europeEtd">-</span></div>
+                <div class="node" id="node2"><div class="node-dot"></div><label id="portLabel">中转港</label><span id="transshipmentEta">-</span></div>
+                <div class="node" id="node3"><div class="node-dot"></div><label>上海到港</label><span id="shanghaiEta">-</span></div>
+            </div>
+            <div class="info-grid" id="infoGrid"></div>
+            <div class="remark"><strong>最新节点：</strong><span id="remark">-</span></div>
+        </section>
+        <aside class="chart-panel">
+            <h3>各批次成本与预计销售额 (USD)</h3>
+            <div class="chart-wrap"><canvas id="financeChart"></canvas></div>
+            <div class="legend-note">同一 Lot 含多种货品时，图表会自动合并金额；详情列表仍保留每种货品的独立记录。</div>
+        </aside>
+    </main>
+</div>
+<script>
+    let records = [];
+    let chart = null;
+    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+    const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+
+    async function init() {
+        try {
+            const response = await fetch('data/lots.json', { cache: 'no-store' });
+            if (!response.ok) throw new Error(`数据文件读取失败 (${response.status})`);
+            const data = await response.json();
+            records = data.records || [];
+            if (!records.length) throw new Error('没有找到批次明细');
+            renderSummary(data);
+            renderList();
+            renderChart(data.chartGroups || []);
+            selectRecord(records[records.length - 1]);
+            document.getElementById('subtitle').innerText = `数据基准日: ${data.generatedAt} | ${data.summary.lotCount} 个 Lot / ${data.summary.recordCount} 条货品记录 | Excel 自动生成`;
+        } catch (error) {
+            document.getElementById('errorBox').innerHTML = `<div class="error">${error.message}</div>`;
+        }
+    }
+
+    function renderSummary(data) {
+        const s = data.summary;
+        document.getElementById('summary').innerHTML = `
+            <div class="metric"><label>批次规模</label><strong>${s.lotCount} Lots / ${s.recordCount} records</strong><span>${number.format(s.containers)} 柜 · ${number.format(s.pallets)} 托</span></div>
+            <div class="metric"><label>采购成本总额</label><strong>${money.format(s.costAmount)}</strong><span>按货品明细汇总</span></div>
+            <div class="metric"><label>预计销售总额</label><strong>${money.format(s.salesAmount)}</strong><span>上海销售口径</span></div>
+            <div class="metric"><label>预计毛利</label><strong>${money.format(s.grossProfit)}</strong><span>毛利率 ${s.grossMargin}%</span></div>
+        `;
+    }
+
+    function renderList() {
+        document.getElementById('recordList').innerHTML = records.map(record => `
+            <div class="record" id="record-${safeId(record.id)}" onclick='selectById(${JSON.stringify(record.id)})'>
+                <div><strong>Lot ${record.lot}</strong><small>${record.product}</small></div>
+                <span class="status" style="color:${statusColor(record.status)}">${record.status}</span>
+            </div>
+        `).join('');
+    }
+
+    function selectById(id) {
+        const record = records.find(item => item.id === id);
+        if (record) selectRecord(record);
+    }
+
+    function selectRecord(record) {
+        document.querySelectorAll('.record').forEach(item => item.classList.remove('active'));
+        const active = document.getElementById(`record-${safeId(record.id)}`);
+        if (active) active.classList.add('active');
+        document.getElementById('detailTitle').innerText = `Lot ${record.lot} · ${record.product}`;
+        document.getElementById('detailSubtitle').innerText = record.bl;
+        document.getElementById('europeEtd').innerText = record.europeEtd;
+        document.getElementById('portLabel').innerText = record.transshipmentPort === '待定' ? '中转港' : record.transshipmentPort;
+        document.getElementById('transshipmentEta').innerText = record.transshipmentEta;
+        document.getElementById('shanghaiEta').innerText = record.shanghaiEta;
+        document.getElementById('remark').innerText = record.remark;
+        document.getElementById('infoGrid').innerHTML = `
+            <div class="info"><label>柜数</label><strong>${record.containersDisplay}</strong></div>
+            <div class="info"><label>托数</label><strong>${number.format(record.pallets)}</strong></div>
+            <div class="info"><label>件数</label><strong>${record.quantity}</strong></div>
+            <div class="info"><label>发沪净重</label><strong>${number.format(record.netWeightKg)} KG</strong></div>
+            <div class="info"><label>发沪毛重</label><strong>${number.format(record.grossWeightKg)} KG</strong></div>
+            <div class="info"><label>物流状态</label><strong style="color:${statusColor(record.status)}">${record.status}</strong></div>
+            <div class="info"><label>成本总额</label><strong>${money.format(record.costAmount)}</strong></div>
+            <div class="info"><label>预计销售额</label><strong>${money.format(record.salesAmount)}</strong></div>
+            <div class="info"><label>预计毛利 / 毛利率</label><strong>${money.format(record.grossProfit)} / ${record.grossMargin}%</strong></div>
+        `;
+        updateTimeline(record.stage);
+    }
+
+    function updateTimeline(stage) {
+        const nodes = ['node1', 'node2', 'node3'];
+        nodes.forEach(id => document.getElementById(id).className = 'node');
+        document.getElementById('node1').classList.add('passed');
+        if (stage === 'arrived_shanghai' || stage === 'shanghai_due') {
+            document.getElementById('node2').classList.add('passed');
+            document.getElementById('node3').classList.add(stage === 'arrived_shanghai' ? 'passed' : 'current');
+        } else if (stage === 'transshipment') {
+            document.getElementById('node2').classList.add('current');
+        } else {
+            document.getElementById('node1').classList.add('current');
+        }
+    }
+
+    function renderChart(groups) {
+        if (chart) chart.destroy();
+        chart = new Chart(document.getElementById('financeChart'), {
+            type: 'bar',
+            data: {
+                labels: groups.map(group => `Lot ${group.lot}`),
+                datasets: [
+                    { label: '成本', data: groups.map(group => group.costAmount), backgroundColor: 'rgba(37, 99, 235, 0.72)', borderColor: '#2563eb', borderWidth: 1, borderRadius: 4 },
+                    { label: '预计销售额', data: groups.map(group => group.salesAmount), backgroundColor: 'rgba(15, 138, 100, 0.72)', borderColor: '#0f8a64', borderWidth: 1, borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { callback: value => '$' + Math.round(value / 1000) + 'k' }, grid: { color: '#edf0f3' } },
+                    x: { grid: { display: false } }
+                },
+                plugins: { tooltip: { callbacks: { label: context => `${context.dataset.label}: ${money.format(context.raw)}` } } }
+            }
+        });
+    }
+
+    function safeId(value) { return String(value).replace(/[^a-zA-Z0-9_-]/g, '-'); }
+    function statusColor(status) {
+        if (status === '抵沪') return 'var(--green)';
+        if (status === '到港待确认') return 'var(--red)';
+        if (status.includes('中转')) return 'var(--amber)';
+        return 'var(--blue)';
+    }
+    window.onload = init;
+</script>
+</body>
+</html>
